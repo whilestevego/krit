@@ -1,0 +1,93 @@
+plugins {
+  id 'org.jetbrains.kotlin.jvm' version '2.2.20'
+  id 'com.gradleup.shadow' version '9.4.1'
+}
+
+group = 'wile.tools'
+version = '1.0.0'
+
+repositories {
+  mavenCentral()
+  // Analysis API -for-ide artifacts are hosted here, not on Maven Central.
+  maven { url "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/" }
+}
+
+dependencies {
+  // kotlin-compiler (non-embeddable) provides:
+  //   - the FIR analysis pipeline
+  //   - unshaded IntelliJ Platform core (com.intellij.*) needed by the Analysis API
+  // We use the non-embeddable variant because the embeddable shades com.intellij.* to
+  // org.jetbrains.kotlin.com.intellij.*, which is incompatible with the Analysis API.
+  implementation "org.jetbrains.kotlin:kotlin-compiler:2.3.21"
+
+  // Analysis API -for-ide artifacts: each is a fat JAR whose transitive deps are bundled
+  // inside it; the POMs reference artifacts that are not separately published, so we
+  // disable transitive resolution to avoid spurious "not found" errors.
+  //
+  // The full XML-include chain that the plugin loader resolves at startup:
+  //   analysis-api-fir-standalone-base.xml (standalone-for-ide)
+  //     → analysis-api-fir.xml (k2-for-ide)
+  //         → analysis-api-impl-base.xml (impl-base-for-ide)
+  //             → analysis-api-platform-interface.xml (platform-interface-for-ide)
+  //             → /META-INF/extensions/compiler.xml (kotlin-compiler)
+  //         → low-level-api-fir.xml (low-level-api-fir-for-ide)
+  //             → analysis-api-platform-interface.xml (platform-interface-for-ide)
+  //             → /META-INF/extensions/compiler.xml (kotlin-compiler)
+  //         → symbol-light-classes.xml (symbol-light-classes-for-ide)
+  implementation("org.jetbrains.kotlin:analysis-api-standalone-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:analysis-api-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:analysis-api-k2-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:analysis-api-impl-base-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:low-level-api-fir-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:symbol-light-classes-for-ide:2.3.21") { transitive = false }
+  implementation("org.jetbrains.kotlin:analysis-api-platform-interface-for-ide:2.3.21") { transitive = false }
+
+  // Runtime dependencies required by Analysis API classes bundled in the -for-ide fat JARs
+  // (not declared in those POMs, must be supplied explicitly).
+  // XmlElement.<clinit> references kotlinx.serialization.KSerializer.
+  implementation 'org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.9.0'
+  // KotlinCachingPackageProviderFactory and related caches use Caffeine.
+  implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
+  // IntelliJ platform inspection API (InspectionManager, ProblemsHolder, LocalInspectionTool, etc.)
+  implementation("com.jetbrains.intellij.platform:analysis:241.194") { transitive = false }
+  // InvalidDataException is referenced by InspectionProfileEntry (superclass of LocalInspectionTool)
+  // and must be on the fat JAR classloader's path for reflection-based constructor resolution.
+  implementation("com.jetbrains.intellij.platform:util:241.194") { transitive = false }
+
+  implementation 'com.github.ajalt.clikt:clikt:4.4.0'
+  implementation 'org.yaml:snakeyaml:2.2'
+}
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    // allWarningsAsErrors intentionally omitted: this module calls KotlinCoreEnvironment (K1 API)
+    // which carries a "planned to deprecate" notice in 2.2.x. Once the K2 standalone analysis
+    // API stabilises this module can be migrated and the flag re-enabled.
+  }
+}
+
+shadowJar {
+  archiveBaseName = 'kt-analyzer'
+  archiveVersion = ''
+  archiveClassifier = ''
+  mergeServiceFiles()
+  manifest {
+    attributes 'Main-Class': 'wile.tools.ktanalyzer.MainKt'
+  }
+  // Exclude kotlin-compiler-embeddable's own signature files to avoid conflicts.
+  exclude 'META-INF/*.SF'
+  exclude 'META-INF/*.DSA'
+  exclude 'META-INF/*.RSA'
+}
+
+assemble.dependsOn shadowJar
