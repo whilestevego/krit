@@ -1,7 +1,7 @@
-package wile.tools.krit.config
+package io.github.whilestevego.krit.config
 
 import org.yaml.snakeyaml.Yaml
-import wile.tools.krit.api.Severity
+import io.github.whilestevego.krit.api.Severity
 import java.io.File
 
 object ConfigLoader {

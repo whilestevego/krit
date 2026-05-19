@@ -1,4 +1,4 @@
-package wile.tools.krit
+package io.github.whilestevego.krit
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.default
@@ -6,12 +6,12 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
-import wile.tools.krit.api.Severity
-import wile.tools.krit.config.ConfigLoader
-import wile.tools.krit.engine.AnalysisRunner
-import wile.tools.krit.engine.PsiEngine
-import wile.tools.krit.report.SarifReporter
-import wile.tools.krit.report.TextReporter
+import io.github.whilestevego.krit.api.Severity
+import io.github.whilestevego.krit.config.ConfigLoader
+import io.github.whilestevego.krit.engine.AnalysisRunner
+import io.github.whilestevego.krit.engine.PsiEngine
+import io.github.whilestevego.krit.report.SarifReporter
+import io.github.whilestevego.krit.report.TextReporter
 import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream

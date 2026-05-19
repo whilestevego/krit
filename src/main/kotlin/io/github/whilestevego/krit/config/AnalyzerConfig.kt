@@ -1,6 +1,6 @@
-package wile.tools.krit.config
+package io.github.whilestevego.krit.config
 
-import wile.tools.krit.api.Severity
+import io.github.whilestevego.krit.api.Severity
 
 data class AnalyzerConfig(
     val suppress: Set<String> = emptySet(),

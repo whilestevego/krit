@@ -1,7 +1,7 @@
-package wile.tools.krit.report
+package io.github.whilestevego.krit.report
 
-import wile.tools.krit.api.LintFinding
-import wile.tools.krit.api.Severity
+import io.github.whilestevego.krit.api.LintFinding
+import io.github.whilestevego.krit.api.Severity
 import java.io.PrintWriter
 
 object TextReporter : Reporter {

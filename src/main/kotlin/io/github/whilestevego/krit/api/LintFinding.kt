@@ -1,4 +1,4 @@
-package wile.tools.krit.api
+package io.github.whilestevego.krit.api
 
 data class LintFinding(
     val ruleId: String,
