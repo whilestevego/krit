@@ -21,7 +21,57 @@ import kotlin.system.exitProcess
 class KritCommand :
     CliktCommand(
         name = "krit",
-        help = "Analyze Kotlin source files using the Kotlin compiler's native diagnostics.",
+        help = """
+            Analyze Kotlin source files using the Kotlin K2 compiler's native diagnostics and
+            IDE-level inspections.
+
+            Diagnostics cover type errors, unresolved references, and other compiler-detected
+            problems. Inspections add style, correctness, and code-quality checks drawn from
+            the IntelliJ Kotlin plugin.
+
+            Findings are reported with a severity level — ERROR, WARNING, HINT, or INFO — and
+            the process exits with code 1 when any finding meets the --fail-on-severity threshold
+            (default: ERROR), making krit suitable for CI pipelines and pre-commit hooks.
+        """.trimIndent(),
+        epilog = """
+            ## Examples
+
+            Analyze a source directory:
+
+                krit -i src/main/kotlin
+
+            Analyze with full type resolution:
+
+                krit -i src/main/kotlin -cp lib/dep1.jar:lib/dep2.jar
+
+            Run common/conservative checks only (matches Kotlin Language Server defaults):
+
+                krit -i src/main/kotlin --common-checks
+
+            Output SARIF for GitHub Code Scanning:
+
+                krit -i src/main/kotlin --format sarif --output report.json
+
+            Fail on warnings in CI:
+
+                krit -i src/main/kotlin --fail-on-severity WARNING
+
+            ## Severity levels
+
+            INFO < HINT < WARNING < ERROR
+
+            ## Config file
+
+            Place a `krit.yml` in `config/krit.yml` (or pass `--config`) to suppress rules or
+            override severities:
+
+                suppress:
+                  - RULE_ID
+                severity-overrides:
+                  NOISY_RULE: HINT
+                  CRITICAL_RULE: ERROR
+        """.trimIndent(),
+        printHelpOnEmptyArgs = true,
     ) {
     private val inputs by
         option("--input", "-i", help = "Source directory or .kt file to analyze (repeatable)")
