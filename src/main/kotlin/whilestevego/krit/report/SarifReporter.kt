@@ -1,7 +1,7 @@
-package io.github.whilestevego.krit.report
+package whilestevego.krit.report
 
-import io.github.whilestevego.krit.api.LintFinding
-import io.github.whilestevego.krit.api.Severity
+import whilestevego.krit.api.LintFinding
+import whilestevego.krit.api.Severity
 import java.io.PrintWriter
 
 object SarifReporter : Reporter {

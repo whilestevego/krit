@@ -1,4 +1,4 @@
-package io.github.whilestevego.krit.engine
+package whilestevego.krit.engine
 
 import com.intellij.ide.plugins.DataLoader
 import com.intellij.ide.plugins.PathResolver

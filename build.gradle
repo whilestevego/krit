@@ -3,7 +3,7 @@ plugins {
   id 'com.gradleup.shadow' version '9.4.1'
 }
 
-group = 'io.github.whilestevego'
+group = 'whilestevego'
 version = '0.1.0'
 
 repositories {
@@ -86,7 +86,7 @@ shadowJar {
   duplicatesStrategy = DuplicatesStrategy.EXCLUDE
   mergeServiceFiles()
   manifest {
-    attributes 'Main-Class': 'io.github.whilestevego.krit.MainKt'
+    attributes 'Main-Class': 'whilestevego.krit.MainKt'
   }
   // Exclude kotlin-compiler-embeddable's own signature files to avoid conflicts.
   exclude 'META-INF/*.SF'

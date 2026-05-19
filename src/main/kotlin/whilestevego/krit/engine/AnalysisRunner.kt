@@ -1,10 +1,10 @@
-package io.github.whilestevego.krit.engine
+package whilestevego.krit.engine
 
 import com.intellij.codeInspection.ProblemHighlightType
 import org.jetbrains.kotlin.analysis.api.diagnostics.KaSeverity
-import io.github.whilestevego.krit.api.LintFinding
-import io.github.whilestevego.krit.api.Severity
-import io.github.whilestevego.krit.config.AnalyzerConfig
+import whilestevego.krit.api.LintFinding
+import whilestevego.krit.api.Severity
+import whilestevego.krit.config.AnalyzerConfig
 import java.io.File
 
 class AnalysisRunner(
