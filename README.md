@@ -5,7 +5,7 @@ A Kotlin source code analyzer that uses the Kotlin compiler's native diagnostics
 ## Features
 
 - Runs Kotlin K2 compiler diagnostics with full type resolution
-- Runs IDE-level inspections alongside compiler diagnostics
+- Runs Kotlin IntelliJ plugin inspections alongside compiler diagnostics
 - Outputs human-readable text or SARIF (for CI/CD integration)
 - Configurable suppression and severity overrides via YAML
 - Exit code based on finding severity — suitable for use in pre-commit hooks or CI pipelines
