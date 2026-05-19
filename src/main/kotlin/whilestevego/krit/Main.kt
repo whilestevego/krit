@@ -117,9 +117,11 @@ class KritCommand :
 
     override fun run() {
         val config = ConfigLoader.load(configFile)
-        val classpathFiles =
-            if (classpath.isBlank()) emptyList()
-            else classpath.split(File.pathSeparatorChar).map(::File).filter { it.exists() }
+        val classpathFiles = buildList {
+            if (classpath.isNotBlank())
+                addAll(classpath.split(File.pathSeparatorChar).map(::File).filter { it.exists() })
+            addAll(config.classpath)
+        }
 
         val sourceFiles = inputs.flatMap(::collectKtFiles)
         if (sourceFiles.isEmpty()) {
