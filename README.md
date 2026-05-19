@@ -12,7 +12,7 @@ A Kotlin source code analyzer that uses the Kotlin compiler's native diagnostics
 
 ## Requirements
 
-- Java 21+ (Java 25 required for IDE inspections; on Java 21 inspections are skipped)
+- Java 25+ (IntelliJ platform classes bundled in the JAR are incompatible with earlier versions)
 
 ## Build
 
