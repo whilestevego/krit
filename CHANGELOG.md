@@ -17,5 +17,5 @@ Initial release.
 - `--format` / `-f` — output as human-readable `text` or `sarif`
 - `--output` / `-o` — write output to a file instead of stdout
 - `--absolute-paths` — print absolute paths instead of paths relative to CWD
-- `--common-checks` — restrict compiler diagnostics to common checkers and filter inspections to those enabled by default in the Kotlin Language Server
+- `--common-checks` — restrict compiler diagnostics to common checkers and filter inspections to those enabled by default in the Kotlin IntelliJ plugin
 - `--fail-on-severity` — exit with code `1` when any finding meets or exceeds `WARNING` or `ERROR` (default: `ERROR`)
