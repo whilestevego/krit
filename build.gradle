@@ -6,6 +6,49 @@ plugins {
 group = 'whilestevego'
 version = '0.1.0'
 
+def kotlinLspVersion = project.property('kotlinLspVersion')
+def pluginsJarDir = layout.buildDirectory.dir("kotlin-plugins")
+def pluginsJar = pluginsJarDir.map { it.file("language-server-plugins-kotlin.jar") }
+
+tasks.register('downloadKotlinPluginsJar') {
+  outputs.file(pluginsJar)
+  doLast {
+    def dir = pluginsJarDir.get().asFile
+    dir.mkdirs()
+    def out = pluginsJar.get().asFile
+    if (!out.exists()) {
+      def url = "https://download-cdn.jetbrains.com/kotlin-lsp/${kotlinLspVersion}/kotlin-server-${kotlinLspVersion}.tar.gz"
+      def tmp = File.createTempFile("kotlin-server", ".tar.gz")
+      try {
+        new URL(url).withInputStream { input -> tmp << input }
+        def proc = ["tar", "-xzOf", tmp.absolutePath,
+                    "kotlin-server-${kotlinLspVersion}/plugins/kotlin/lib/language-server-plugins-kotlin.jar"]
+                    .execute()
+        out.bytes = proc.inputStream.bytes
+        proc.waitFor()
+      } finally { tmp.delete() }
+    }
+  }
+}
+
+def pluginsJarResourceDir = layout.buildDirectory.dir("generated-resources")
+
+tasks.register('copyKotlinPluginsJarToResources', Copy) {
+  dependsOn downloadKotlinPluginsJar
+  from pluginsJar
+  into pluginsJarResourceDir.map { it.dir("whilestevego/krit/engine") }
+}
+
+processResources.dependsOn copyKotlinPluginsJarToResources
+
+sourceSets {
+  main {
+    resources {
+      srcDir pluginsJarResourceDir
+    }
+  }
+}
+
 repositories {
   mavenCentral()
   // Analysis API -for-ide artifacts are hosted here, not on Maven Central.
@@ -57,6 +100,7 @@ dependencies {
 
   implementation 'com.github.ajalt.clikt:clikt:4.4.0'
   implementation 'org.yaml:snakeyaml:2.2'
+
 }
 
 java {

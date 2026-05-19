@@ -5,14 +5,14 @@ A Kotlin source code analyzer that uses the Kotlin compiler's native diagnostics
 ## Features
 
 - Runs Kotlin K2 compiler diagnostics with full type resolution
-- Runs Kotlin IntelliJ plugin inspections alongside compiler diagnostics
+- Runs IDE-level inspections bundled directly in the JAR (no external tooling required)
 - Outputs human-readable text or SARIF (for CI/CD integration)
 - Configurable suppression and severity overrides via YAML
 - Exit code based on finding severity — suitable for use in pre-commit hooks or CI pipelines
 
 ## Requirements
 
-- Java 21+
+- Java 21+ (Java 25 required for IDE inspections; on Java 21 inspections are skipped)
 
 ## Build
 
@@ -25,7 +25,9 @@ This produces `build/libs/krit.jar`.
 ## Usage
 
 ```sh
-java -jar build/libs/krit.jar [OPTIONS]
+java --enable-native-access=ALL-UNNAMED \
+     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+     -jar build/libs/krit.jar [OPTIONS]
 ```
 
 ### Options
@@ -44,20 +46,22 @@ java -jar build/libs/krit.jar [OPTIONS]
 ### Examples
 
 ```sh
+KRIT="java --enable-native-access=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -jar krit.jar"
+
 # Analyze a directory
-java -jar build/libs/krit.jar -i src/main/kotlin
+$KRIT -i src/main/kotlin
 
 # Output SARIF to a file
-java -jar build/libs/krit.jar -i src -f sarif -o report.json
+$KRIT -i src -f sarif -o report.json
 
 # Fail on warnings (e.g. in CI)
-java -jar build/libs/krit.jar -i src --fail-on-severity WARNING
+$KRIT -i src --fail-on-severity WARNING
 
 # Analyze with an external classpath
-java -jar build/libs/krit.jar -i src -cp "lib/foo.jar:lib/bar.jar"
+$KRIT -i src -cp "lib/foo.jar:lib/bar.jar"
 
 # Run only common/conservative checks
-java -jar build/libs/krit.jar -i src --common-checks
+$KRIT -i src --common-checks
 ```
 
 ### Exit Codes
