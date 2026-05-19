@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+JAR="$SCRIPT_DIR/../build/libs/krit.jar"
+
+if [ ! -f "$JAR" ]; then
+  echo "krit: JAR not found at $JAR — run './gradlew shadowJar' first" >&2
+  exit 1
+fi
+
+exec java --enable-native-access=ALL-UNNAMED \
+          --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+          -jar "$JAR" "$@"
