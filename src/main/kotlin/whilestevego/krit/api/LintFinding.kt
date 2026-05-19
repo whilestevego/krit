@@ -1,4 +1,4 @@
-package whilestevego.ktanalyzer.api
+package whilestevego.krit.api
 
 data class LintFinding(
     val ruleId: String,

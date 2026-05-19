@@ -1,6 +1,6 @@
-package whilestevego.ktanalyzer.report
+package whilestevego.krit.report
 
-import whilestevego.ktanalyzer.api.LintFinding
+import whilestevego.krit.api.LintFinding
 import java.io.PrintWriter
 
 interface Reporter {

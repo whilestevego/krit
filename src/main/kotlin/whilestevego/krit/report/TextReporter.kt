@@ -1,7 +1,7 @@
-package whilestevego.ktanalyzer.report
+package whilestevego.krit.report
 
-import whilestevego.ktanalyzer.api.LintFinding
-import whilestevego.ktanalyzer.api.Severity
+import whilestevego.krit.api.LintFinding
+import whilestevego.krit.api.Severity
 import java.io.PrintWriter
 
 object TextReporter : Reporter {
@@ -13,11 +13,12 @@ object TextReporter : Reporter {
             )
         }
         if (findings.isNotEmpty()) writer.println()
-        val errors = findings.count { it.severity == Severity.ERROR }
+        val errors   = findings.count { it.severity == Severity.ERROR }
         val warnings = findings.count { it.severity == Severity.WARNING }
-        val infos = findings.count { it.severity == Severity.INFO }
+        val hints    = findings.count { it.severity == Severity.HINT }
+        val infos    = findings.count { it.severity == Severity.INFO }
         writer.println(
-            "Found ${findings.size} finding(s): $errors error(s), $warnings warning(s), $infos info(s)"
+            "Found ${findings.size} finding(s): $errors error(s), $warnings warning(s), $hints hint(s), $infos info(s)"
         )
         writer.flush()
     }

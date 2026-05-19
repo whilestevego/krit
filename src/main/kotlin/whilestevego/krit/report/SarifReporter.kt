@@ -1,7 +1,7 @@
-package whilestevego.ktanalyzer.report
+package whilestevego.krit.report
 
-import whilestevego.ktanalyzer.api.LintFinding
-import whilestevego.ktanalyzer.api.Severity
+import whilestevego.krit.api.LintFinding
+import whilestevego.krit.api.Severity
 import java.io.PrintWriter
 
 object SarifReporter : Reporter {
@@ -15,7 +15,7 @@ object SarifReporter : Reporter {
         sb.appendLine("""    {""")
         sb.appendLine("""      "tool": {""")
         sb.appendLine("""        "driver": {""")
-        sb.appendLine("""          "name": "kt-analyzer",""")
+        sb.appendLine("""          "name": "krit",""")
         sb.appendLine("""          "version": "1.0.0",""")
         sb.appendLine("""          "rules": [""")
         rules.forEachIndexed { i, ruleId ->
@@ -32,7 +32,7 @@ object SarifReporter : Reporter {
                 when (f.severity) {
                     Severity.ERROR -> "error"
                     Severity.WARNING -> "warning"
-                    Severity.INFO -> "note"
+                    Severity.HINT, Severity.INFO -> "note"
                 }
             sb.appendLine("""        {""")
             sb.appendLine("""          "ruleId": ${json(f.ruleId)},""")

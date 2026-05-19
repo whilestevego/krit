@@ -1,10 +1,10 @@
-package whilestevego.ktanalyzer.engine
+package whilestevego.krit.engine
 
 import com.intellij.codeInspection.ProblemHighlightType
 import org.jetbrains.kotlin.analysis.api.diagnostics.KaSeverity
-import whilestevego.ktanalyzer.api.LintFinding
-import whilestevego.ktanalyzer.api.Severity
-import whilestevego.ktanalyzer.config.AnalyzerConfig
+import whilestevego.krit.api.LintFinding
+import whilestevego.krit.api.Severity
+import whilestevego.krit.config.AnalyzerConfig
 import java.io.File
 
 class AnalysisRunner(
@@ -48,9 +48,9 @@ class AnalysisRunner(
             ?: when (f.severity) {
                 ProblemHighlightType.ERROR -> Severity.ERROR
                 ProblemHighlightType.WARNING,
-                ProblemHighlightType.WEAK_WARNING,
                 ProblemHighlightType.GENERIC_ERROR_OR_WARNING -> Severity.WARNING
-                else -> Severity.INFO
+                ProblemHighlightType.WEAK_WARNING -> Severity.HINT
+                else -> Severity.HINT
             }
 
         return LintFinding(

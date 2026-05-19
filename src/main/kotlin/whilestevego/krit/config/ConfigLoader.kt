@@ -1,7 +1,7 @@
-package whilestevego.ktanalyzer.config
+package whilestevego.krit.config
 
 import org.yaml.snakeyaml.Yaml
-import whilestevego.ktanalyzer.api.Severity
+import whilestevego.krit.api.Severity
 import java.io.File
 
 object ConfigLoader {

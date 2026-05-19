@@ -1,4 +1,4 @@
-package whilestevego.ktanalyzer.engine
+package whilestevego.krit.engine
 
 import com.intellij.codeInspection.GlobalInspectionContext
 import com.intellij.codeInspection.InspectionManager
@@ -31,9 +31,9 @@ data class InspectionFinding(
     val column: Int,
 )
 
-class InspectionRunner {
+class InspectionRunner(private val commonChecksOnly: Boolean = false) {
     fun runInspections(psiFile: KtFile, document: Document): List<InspectionFinding> {
-        val inspections = Loader.inspections
+        val inspections = Loader.getInspections(commonChecksOnly)
         if (inspections.isEmpty()) return emptyList()
 
         val manager = MinimalInspectionManager(psiFile.project)
@@ -71,9 +71,15 @@ class InspectionRunner {
         val lineIndex = document.getLineNumber(startOffset)
         val col = startOffset - document.getLineStartOffset(lineIndex) + 1
         val filePath = psiElement?.containingFile?.virtualFile?.path ?: ""
+        val elementName = psiElement?.let {
+            (it as? com.intellij.psi.PsiNamedElement)?.name ?: it.text?.take(40)
+        } ?: "?"
+        val message = descriptionTemplate
+            .replace("<[^>]+>".toRegex(), "")
+            .replace("#ref", elementName)
         return InspectionFinding(
             inspectionId = inspectionId,
-            message = descriptionTemplate,
+            message = message,
             severity = highlightType,
             filePath = filePath,
             line = lineIndex + 1,
@@ -131,6 +137,21 @@ class InspectionRunner {
     internal object Loader {
         val inspections: List<LocalInspectionTool> by lazy { load() }
 
+        private data class InspectionMeta(val enabledByDefault: Boolean, val level: String)
+
+        private val xmlMeta: Map<String, InspectionMeta> by lazy {
+            pluginsJar?.let { parseInspectionMeta(it) } ?: emptyMap()
+        }
+
+        fun getInspections(commonChecksOnly: Boolean): List<LocalInspectionTool> {
+            val all = inspections
+            if (!commonChecksOnly) return all
+            return all.filter { tool ->
+                val meta = xmlMeta[tool::class.java.name] ?: return@filter true
+                meta.enabledByDefault && meta.level != "INFORMATION" && meta.level != "DO_NOT_SHOW"
+            }
+        }
+
         private val BLACKLISTED_FQNS = setOf(
             "org.jetbrains.kotlin.idea.k2.codeinsight.inspections.RemoveRedundantQualifierNameInspection",
             "org.jetbrains.kotlin.idea.codeInsight.inspections.shared.KotlinUnusedImportInspection",
@@ -154,16 +175,22 @@ class InspectionRunner {
             "org/jetbrains/kotlin/idea/codeInsight/inspections/shared/",
         )
 
+        private val lsLibDir: File? by lazy { findLsLibDir() }
+
+        private val pluginsJar: File? by lazy {
+            lsLibDir?.listFiles { f -> f.extension == "jar" }
+                ?.firstOrNull { it.name == "language-server-plugins-kotlin.jar" }
+        }
+
         private fun load(): List<LocalInspectionTool> {
-            val libDir = findLsLibDir()
+            val libDir = lsLibDir
             if (libDir == null) {
-                System.err.println("kt-analyzer: Kotlin LS not found — IDE inspections skipped")
+                System.err.println("krit: Kotlin LS not found — IDE inspections skipped")
                 return emptyList()
             }
 
             val pluginJars = libDir.listFiles { f -> f.extension == "jar" } ?: return emptyList()
-            val pluginsJar = pluginJars.firstOrNull { it.name == "language-server-plugins-kotlin.jar" }
-                ?: return emptyList()
+            val jar = pluginsJar ?: return emptyList()
             // Inspection classes also need the server's main lib/ JARs (e.g. util-8.jar for
             // InvalidDataException). libDir is plugins/kotlin/lib/ — server lib/ is 3 levels up.
             val serverJars = libDir.parentFile?.parentFile?.parentFile
@@ -173,7 +200,7 @@ class InspectionRunner {
                 ?: emptyArray()
             val allJars = pluginJars + serverJars
 
-            val classNames = scanJarForInspectionClasses(pluginsJar)
+            val classNames = scanJarForInspectionClasses(jar)
             val loader = URLClassLoader(
                 allJars.map { it.toURI().toURL() }.toTypedArray(),
                 InspectionRunner::class.java.classLoader,
@@ -182,7 +209,38 @@ class InspectionRunner {
             return classNames
                 .filter { it !in BLACKLISTED_FQNS }
                 .mapNotNull { fqn -> instantiate(fqn, loader) }
-                .also { System.err.println("kt-analyzer: Loaded ${it.size} IDE inspections") }
+                .also { System.err.println("krit: Loaded ${it.size} IDE inspections") }
+        }
+
+        private val INSPECTION_ELEMENT_RE = Regex("""<localInspection\b([^>]*)>""")
+        private val ATTR_RE = Regex("""\b(\w+)="([^"]*)"""")
+
+        private fun parseInspectionMeta(jar: File): Map<String, InspectionMeta> {
+            val result = mutableMapOf<String, InspectionMeta>()
+            try {
+                JarInputStream(jar.inputStream()).use { jarIn ->
+                    var entry = jarIn.nextJarEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name.endsWith(".xml")) {
+                            extractMeta(jarIn.readBytes().toString(Charsets.UTF_8), result)
+                        }
+                        entry = jarIn.nextJarEntry
+                    }
+                }
+            } catch (_: Exception) {}
+            return result
+        }
+
+        private fun extractMeta(xml: String, result: MutableMap<String, InspectionMeta>) {
+            INSPECTION_ELEMENT_RE.findAll(xml).forEach { match ->
+                val attrs = ATTR_RE.findAll(match.groupValues[1])
+                    .associate { it.groupValues[1] to it.groupValues[2] }
+                val fqn = attrs["implementationClass"] ?: return@forEach
+                result[fqn] = InspectionMeta(
+                    enabledByDefault = attrs["enabledByDefault"] != "false",
+                    level = attrs["level"] ?: "WARNING",
+                )
+            }
         }
 
         private fun findLsLibDir(): File? {
@@ -233,7 +291,7 @@ class InspectionRunner {
                 if (!javaVersionWarningEmitted) {
                     javaVersionWarningEmitted = true
                     System.err.println(
-                        "kt-analyzer: IDE inspections require Java 25 — use the JBR bundled with" +
+                        "krit: IDE inspections require Java 25 — use the JBR bundled with" +
                             " the Kotlin LS (see 'make analyze-semantic')"
                     )
                 }

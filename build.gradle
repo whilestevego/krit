@@ -77,12 +77,16 @@ kotlin {
 }
 
 shadowJar {
-  archiveBaseName = 'kt-analyzer'
+  archiveBaseName = 'krit'
   archiveVersion = ''
   archiveClassifier = ''
+  // First-wins: project classes are added before dependency JARs, so our replacement
+  // com.intellij.util.containers.Unsafe (uses jdk.internal.misc.Unsafe, not deprecated)
+  // shadows the one from kotlin-compiler that calls sun.misc.Unsafe.
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
   mergeServiceFiles()
   manifest {
-    attributes 'Main-Class': 'whilestevego.ktanalyzer.MainKt'
+    attributes 'Main-Class': 'whilestevego.krit.MainKt'
   }
   // Exclude kotlin-compiler-embeddable's own signature files to avoid conflicts.
   exclude 'META-INF/*.SF'
