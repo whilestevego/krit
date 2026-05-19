@@ -139,6 +139,15 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
 
         private data class InspectionMeta(val enabledByDefault: Boolean, val level: String)
 
+        private val pluginsJar: File? by lazy {
+            val stream = InspectionRunner::class.java
+                .getResourceAsStream("language-server-plugins-kotlin.jar") ?: return@lazy null
+            val tmp = File.createTempFile("krit-plugins-", ".jar")
+            tmp.deleteOnExit()
+            stream.use { it.copyTo(tmp.outputStream()) }
+            tmp
+        }
+
         private val xmlMeta: Map<String, InspectionMeta> by lazy {
             pluginsJar?.let { parseInspectionMeta(it) } ?: emptyMap()
         }
@@ -175,38 +184,16 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
             "org/jetbrains/kotlin/idea/codeInsight/inspections/shared/",
         )
 
-        private val lsLibDir: File? by lazy { findLsLibDir() }
-
-        private val pluginsJar: File? by lazy {
-            lsLibDir?.listFiles { f -> f.extension == "jar" }
-                ?.firstOrNull { it.name == "language-server-plugins-kotlin.jar" }
-        }
-
         private fun load(): List<LocalInspectionTool> {
-            val libDir = lsLibDir
-            if (libDir == null) {
-                System.err.println("krit: Kotlin LS not found — IDE inspections skipped")
+            val jar = pluginsJar ?: run {
+                System.err.println("krit: language-server-plugins-kotlin.jar not bundled — IDE inspections skipped")
                 return emptyList()
             }
-
-            val pluginJars = libDir.listFiles { f -> f.extension == "jar" } ?: return emptyList()
-            val jar = pluginsJar ?: return emptyList()
-            // Inspection classes also need the server's main lib/ JARs (e.g. util-8.jar for
-            // InvalidDataException). libDir is plugins/kotlin/lib/ — server lib/ is 3 levels up.
-            val serverJars = libDir.parentFile?.parentFile?.parentFile
-                ?.let { File(it, "lib") }
-                ?.takeIf { it.isDirectory }
-                ?.listFiles { f -> f.extension == "jar" }
-                ?: emptyArray()
-            val allJars = pluginJars + serverJars
-
-            val classNames = scanJarForInspectionClasses(jar)
             val loader = URLClassLoader(
-                allJars.map { it.toURI().toURL() }.toTypedArray(),
+                arrayOf(jar.toURI().toURL()),
                 InspectionRunner::class.java.classLoader,
             )
-
-            return classNames
+            return scanJarForInspectionClasses(jar)
                 .filter { it !in BLACKLISTED_FQNS }
                 .mapNotNull { fqn -> instantiate(fqn, loader) }
                 .also { System.err.println("krit: Loaded ${it.size} IDE inspections") }
@@ -243,22 +230,6 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
             }
         }
 
-        private fun findLsLibDir(): File? {
-            // macOS: ~/Library/Application Support/Zed/extensions/work/kotlin/
-            val mac = File(System.getProperty("user.home"), "Library/Application Support/Zed/extensions/work/kotlin")
-            if (mac.exists()) findServerLib(mac)?.let { return it }
-            // Linux: ~/.local/share/zed/extensions/work/kotlin/
-            val linux = File(System.getProperty("user.home"), ".local/share/zed/extensions/work/kotlin")
-            if (linux.exists()) findServerLib(linux)?.let { return it }
-            return null
-        }
-
-        private fun findServerLib(base: File): File? {
-            val lsDir = base.listFiles()?.maxByOrNull { it.name } ?: return null
-            val serverName = lsDir.name.replace("kotlin-lsp-", "kotlin-server-")
-            return File(lsDir, "$serverName/plugins/kotlin/lib").takeIf { it.exists() }
-        }
-
         private fun scanJarForInspectionClasses(jar: File): List<String> {
             val names = mutableListOf<String>()
             try {
@@ -278,8 +249,6 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
             return names
         }
 
-        private var javaVersionWarningEmitted = false
-
         private fun instantiate(fqn: String, loader: ClassLoader): LocalInspectionTool? {
             return try {
                 val cls = loader.loadClass(fqn)
@@ -287,15 +256,6 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
                 if (!LocalInspectionTool::class.java.isAssignableFrom(cls)) return null
                 if (isSuperclassBlacklisted(cls)) return null
                 cls.getDeclaredConstructor().newInstance() as LocalInspectionTool
-            } catch (_: UnsupportedClassVersionError) {
-                if (!javaVersionWarningEmitted) {
-                    javaVersionWarningEmitted = true
-                    System.err.println(
-                        "krit: IDE inspections require Java 25 — use the JBR bundled with" +
-                            " the Kotlin LS (see 'make analyze-semantic')"
-                    )
-                }
-                null
             } catch (_: Throwable) { null }
         }
 
