@@ -25,6 +25,27 @@ object ConfigLoader {
             }
             .toMap()
 
-        return AnalyzerConfig(suppress = suppress, severityOverrides = severityOverrides)
+        val classpath = buildList {
+            // classpath: list of JAR/directory paths
+            (raw["classpath"] as? List<*>)
+                ?.filterIsInstance<String>()
+                ?.map { File(it) }
+                ?.filter { it.exists() }
+                ?.let { addAll(it) }
+
+            // classpath-file: path to a file whose content is the classpath (OS path-separator or newline separated)
+            (raw["classpath-file"] as? String)
+                ?.let { File(it) }
+                ?.takeIf { it.exists() }
+                ?.readText()
+                ?.split(File.pathSeparatorChar, '\n')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.map { File(it) }
+                ?.filter { it.exists() }
+                ?.let { addAll(it) }
+        }
+
+        return AnalyzerConfig(suppress = suppress, severityOverrides = severityOverrides, classpath = classpath)
     }
 }

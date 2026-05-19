@@ -12,7 +12,7 @@ A Kotlin source code analyzer that uses the Kotlin compiler's native diagnostics
 
 ## Requirements
 
-- Java 21+ (Java 25 required for IDE inspections; on Java 21 inspections are skipped)
+- Java 25+ (IntelliJ platform classes bundled in the JAR are incompatible with earlier versions)
 
 ## Build
 
@@ -24,10 +24,16 @@ This produces `build/libs/krit.jar`.
 
 ## Usage
 
+The `bin/krit` wrapper handles the required JVM flags automatically:
+
 ```sh
-java --enable-native-access=ALL-UNNAMED \
-     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
-     -jar build/libs/krit.jar [OPTIONS]
+bin/krit [OPTIONS]
+```
+
+For system-wide use, symlink it into your PATH:
+
+```sh
+ln -s "$(pwd)/bin/krit" ~/.local/bin/krit
 ```
 
 ### Options
@@ -46,22 +52,20 @@ java --enable-native-access=ALL-UNNAMED \
 ### Examples
 
 ```sh
-KRIT="java --enable-native-access=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -jar krit.jar"
-
 # Analyze a directory
-$KRIT -i src/main/kotlin
+krit -i src/main/kotlin
 
 # Output SARIF to a file
-$KRIT -i src -f sarif -o report.json
+krit -i src -f sarif -o report.json
 
 # Fail on warnings (e.g. in CI)
-$KRIT -i src --fail-on-severity WARNING
+krit -i src --fail-on-severity WARNING
 
 # Analyze with an external classpath
-$KRIT -i src -cp "lib/foo.jar:lib/bar.jar"
+krit -i src -cp "lib/foo.jar:lib/bar.jar"
 
 # Run only common/conservative checks
-$KRIT -i src --common-checks
+krit -i src --common-checks
 ```
 
 ### Exit Codes

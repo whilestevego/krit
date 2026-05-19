@@ -1,0 +1,45 @@
+#!/usr/bin/env sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+JAR="$SCRIPT_DIR/../build/libs/krit.jar"
+
+if [ ! -f "$JAR" ]; then
+  echo "krit: JAR not found at $JAR — run './gradlew shadowJar' first" >&2
+  exit 1
+fi
+
+# krit requires Java 25+ (IntelliJ platform classes are incompatible with earlier versions).
+# Resolution order:
+#   1. JAVA_HOME if set and version >= 25
+#   2. Zed's bundled JBR (macOS then Linux)
+#   3. java on PATH if version >= 25
+find_java25() {
+  if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+    ver=$("$JAVA_HOME/bin/java" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')
+    [ "${ver:-0}" -ge 25 ] 2>/dev/null && { echo "$JAVA_HOME/bin/java"; return 0; }
+  fi
+
+  for zed_base in \
+    "$HOME/Library/Application Support/Zed/extensions/work/kotlin" \
+    "$HOME/.local/share/zed/extensions/work/kotlin"
+  do
+    jbr=$(find "$zed_base" -name java -path "*/jbr/*/bin/java" 2>/dev/null | sort -rV | head -1)
+    [ -n "$jbr" ] && { echo "$jbr"; return 0; }
+  done
+
+  if command -v java >/dev/null 2>&1; then
+    ver=$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')
+    [ "${ver:-0}" -ge 25 ] 2>/dev/null && { echo "java"; return 0; }
+  fi
+
+  return 1
+}
+
+JAVA=$(find_java25) || {
+  echo "krit: Java 25+ is required but was not found." >&2
+  echo "      Set JAVA_HOME to a Java 25+ installation, or install the Zed Kotlin extension." >&2
+  exit 1
+}
+
+exec "$JAVA" --enable-native-access=ALL-UNNAMED \
+             --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+             -jar "$JAR" "$@"
