@@ -1,7 +1,7 @@
-package wile.tools.ktanalyzer.report
+package wile.tools.krit.report
 
-import wile.tools.ktanalyzer.api.LintFinding
-import wile.tools.ktanalyzer.api.Severity
+import wile.tools.krit.api.LintFinding
+import wile.tools.krit.api.Severity
 import java.io.PrintWriter
 
 object TextReporter : Reporter {
@@ -13,11 +13,12 @@ object TextReporter : Reporter {
             )
         }
         if (findings.isNotEmpty()) writer.println()
-        val errors = findings.count { it.severity == Severity.ERROR }
+        val errors   = findings.count { it.severity == Severity.ERROR }
         val warnings = findings.count { it.severity == Severity.WARNING }
-        val infos = findings.count { it.severity == Severity.INFO }
+        val hints    = findings.count { it.severity == Severity.HINT }
+        val infos    = findings.count { it.severity == Severity.INFO }
         writer.println(
-            "Found ${findings.size} finding(s): $errors error(s), $warnings warning(s), $infos info(s)"
+            "Found ${findings.size} finding(s): $errors error(s), $warnings warning(s), $hints hint(s), $infos info(s)"
         )
         writer.flush()
     }

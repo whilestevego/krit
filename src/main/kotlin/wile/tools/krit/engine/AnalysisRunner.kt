@@ -1,10 +1,10 @@
-package wile.tools.ktanalyzer.engine
+package wile.tools.krit.engine
 
 import com.intellij.codeInspection.ProblemHighlightType
 import org.jetbrains.kotlin.analysis.api.diagnostics.KaSeverity
-import wile.tools.ktanalyzer.api.LintFinding
-import wile.tools.ktanalyzer.api.Severity
-import wile.tools.ktanalyzer.config.AnalyzerConfig
+import wile.tools.krit.api.LintFinding
+import wile.tools.krit.api.Severity
+import wile.tools.krit.config.AnalyzerConfig
 import java.io.File
 
 class AnalysisRunner(
@@ -48,9 +48,9 @@ class AnalysisRunner(
             ?: when (f.severity) {
                 ProblemHighlightType.ERROR -> Severity.ERROR
                 ProblemHighlightType.WARNING,
-                ProblemHighlightType.WEAK_WARNING,
                 ProblemHighlightType.GENERIC_ERROR_OR_WARNING -> Severity.WARNING
-                else -> Severity.INFO
+                ProblemHighlightType.WEAK_WARNING -> Severity.HINT
+                else -> Severity.HINT
             }
 
         return LintFinding(

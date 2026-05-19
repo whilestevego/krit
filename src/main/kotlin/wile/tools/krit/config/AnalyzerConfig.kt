@@ -1,6 +1,6 @@
-package wile.tools.ktanalyzer.config
+package wile.tools.krit.config
 
-import wile.tools.ktanalyzer.api.Severity
+import wile.tools.krit.api.Severity
 
 data class AnalyzerConfig(
     val suppress: Set<String> = emptySet(),

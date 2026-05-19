@@ -1,4 +1,4 @@
-package wile.tools.ktanalyzer.api
+package wile.tools.krit.api
 
 data class LintFinding(
     val ruleId: String,

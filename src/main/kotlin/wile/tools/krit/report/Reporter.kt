@@ -1,6 +1,6 @@
-package wile.tools.ktanalyzer.report
+package wile.tools.krit.report
 
-import wile.tools.ktanalyzer.api.LintFinding
+import wile.tools.krit.api.LintFinding
 import java.io.PrintWriter
 
 interface Reporter {

@@ -1,7 +1,7 @@
-package wile.tools.ktanalyzer.report
+package wile.tools.krit.report
 
-import wile.tools.ktanalyzer.api.LintFinding
-import wile.tools.ktanalyzer.api.Severity
+import wile.tools.krit.api.LintFinding
+import wile.tools.krit.api.Severity
 import java.io.PrintWriter
 
 object SarifReporter : Reporter {
@@ -15,7 +15,7 @@ object SarifReporter : Reporter {
         sb.appendLine("""    {""")
         sb.appendLine("""      "tool": {""")
         sb.appendLine("""        "driver": {""")
-        sb.appendLine("""          "name": "kt-analyzer",""")
+        sb.appendLine("""          "name": "krit",""")
         sb.appendLine("""          "version": "1.0.0",""")
         sb.appendLine("""          "rules": [""")
         rules.forEachIndexed { i, ruleId ->
@@ -32,7 +32,7 @@ object SarifReporter : Reporter {
                 when (f.severity) {
                     Severity.ERROR -> "error"
                     Severity.WARNING -> "warning"
-                    Severity.INFO -> "note"
+                    Severity.HINT, Severity.INFO -> "note"
                 }
             sb.appendLine("""        {""")
             sb.appendLine("""          "ruleId": ${json(f.ruleId)},""")

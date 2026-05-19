@@ -1,23 +1,26 @@
-package wile.tools.ktanalyzer
+package wile.tools.krit
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
-import wile.tools.ktanalyzer.api.Severity
-import wile.tools.ktanalyzer.config.ConfigLoader
-import wile.tools.ktanalyzer.engine.AnalysisRunner
-import wile.tools.ktanalyzer.engine.PsiEngine
-import wile.tools.ktanalyzer.report.SarifReporter
-import wile.tools.ktanalyzer.report.TextReporter
+import wile.tools.krit.api.Severity
+import wile.tools.krit.config.ConfigLoader
+import wile.tools.krit.engine.AnalysisRunner
+import wile.tools.krit.engine.PsiEngine
+import wile.tools.krit.report.SarifReporter
+import wile.tools.krit.report.TextReporter
 import java.io.File
+import java.io.OutputStream
+import java.io.PrintStream
 import java.io.PrintWriter
 import kotlin.system.exitProcess
 
-class KtAnalyzerCommand :
+class KritCommand :
     CliktCommand(
-        name = "kt-analyzer",
+        name = "krit",
         help = "Analyze Kotlin source files using the Kotlin compiler's native diagnostics.",
     ) {
     private val inputs by
@@ -34,15 +37,26 @@ class KtAnalyzerCommand :
             .default("")
 
     private val configFile by
-        option("--config", "-c", help = "Path to kt-analyzer.yml")
+        option("--config", "-c", help = "Path to krit.yml")
             .file()
-            .default(File("config/kt-analyzer.yml"))
+            .default(File("config/krit.yml"))
 
     private val format by
         option("--format", "-f", help = "Output format: text (default) or sarif").default("text")
 
+    private val absolutePaths by
+        option("--absolute-paths", help = "Print absolute file paths (default: paths relative to CWD)")
+            .flag(default = false)
+
     private val outputFile by
         option("--output", "-o", help = "Write output to file instead of stdout").file()
+
+    private val commonChecks by
+        option(
+                "--common-checks",
+                help = "Restrict compiler diagnostics to ONLY_COMMON_CHECKERS (excludes extended checks)",
+            )
+            .flag(default = false)
 
     private val failOnSeverity by
         option(
@@ -63,9 +77,16 @@ class KtAnalyzerCommand :
             return
         }
 
-        PsiEngine(extraClasspath = classpathFiles).use { engine ->
+        PsiEngine(extraClasspath = classpathFiles, commonChecksOnly = commonChecks).use { engine ->
             val runner = AnalysisRunner(engine, config)
-            val findings = runner.analyze(inputs = inputs, sourceFiles = sourceFiles)
+            val rawFindings = runner.analyze(inputs = inputs, sourceFiles = sourceFiles)
+            val findings = if (absolutePaths) rawFindings else {
+                val cwd = File("").canonicalFile
+                rawFindings.map { f ->
+                    val rel = File(f.filePath).relativeToOrNull(cwd)
+                    f.copy(filePath = if (rel != null) "./${rel.path}" else f.filePath)
+                }
+            }
 
             val writer =
                 outputFile?.let { PrintWriter(it, Charsets.UTF_8) }
@@ -93,4 +114,44 @@ class KtAnalyzerCommand :
         else root.walkTopDown().filter { it.isFile && it.extension in setOf("kt", "java") }.toList()
 }
 
-fun main(args: Array<String>) = KtAnalyzerCommand().main(args)
+fun main(args: Array<String>) {
+    suppressStderrPrefixes(
+        // IntelliJ registry keys accessed before the registry XML is loaded in standalone mode.
+        "WARN: Attempt to load key '",
+    )
+    KritCommand().main(args)
+}
+
+private fun suppressStderrPrefixes(vararg prefixes: String) {
+    System.setErr(PrintStream(LineFilterStream(System.err, prefixes.toList()), true, Charsets.UTF_8))
+}
+
+private class LineFilterStream(
+    private val delegate: OutputStream,
+    private val suppressPrefixes: List<String>,
+) : OutputStream() {
+    private val buf = StringBuilder()
+
+    override fun write(b: Int) {
+        val ch = b.toChar()
+        if (ch == '\n') flush() else buf.append(ch)
+    }
+
+    override fun write(bytes: ByteArray, off: Int, len: Int) {
+        for (i in off until off + len) write(bytes[i].toInt())
+    }
+
+    override fun flush() {
+        val line = buf.toString()
+        buf.clear()
+        if (line.isNotEmpty() && suppressPrefixes.none { line.startsWith(it) }) {
+            delegate.write((line + "\n").toByteArray(Charsets.UTF_8))
+            delegate.flush()
+        }
+    }
+
+    override fun close() {
+        flush()
+        delegate.close()
+    }
+}

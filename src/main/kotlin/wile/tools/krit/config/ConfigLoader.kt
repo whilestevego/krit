@@ -1,7 +1,7 @@
-package wile.tools.ktanalyzer.config
+package wile.tools.krit.config
 
 import org.yaml.snakeyaml.Yaml
-import wile.tools.ktanalyzer.api.Severity
+import wile.tools.krit.api.Severity
 import java.io.File
 
 object ConfigLoader {

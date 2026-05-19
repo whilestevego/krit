@@ -1,4 +1,4 @@
-package wile.tools.ktanalyzer.engine
+package wile.tools.krit.engine
 
 import com.intellij.ide.plugins.DataLoader
 import com.intellij.ide.plugins.PathResolver
@@ -26,13 +26,16 @@ data class DiagnosticMessage(
     val column: Int,
 )
 
-class PsiEngine(private val extraClasspath: List<File> = emptyList()) : AutoCloseable {
-    private val disposable = Disposer.newDisposable("kt-analyzer")
+class PsiEngine(
+    private val extraClasspath: List<File> = emptyList(),
+    private val commonChecksOnly: Boolean = false,
+) : AutoCloseable {
+    private val disposable = Disposer.newDisposable("krit")
     private val _messages = mutableListOf<DiagnosticMessage>()
     val messages: List<DiagnosticMessage> get() = _messages
     private val _inspectionFindings = mutableListOf<InspectionFinding>()
     val inspectionFindings: List<InspectionFinding> get() = _inspectionFindings
-    private val inspectionRunner = InspectionRunner()
+    private val inspectionRunner = InspectionRunner(commonChecksOnly)
 
     /**
      * Analyzes [allSourceFiles] for diagnostics.
@@ -94,7 +97,11 @@ class PsiEngine(private val extraClasspath: List<File> = emptyList()) : AutoClos
 
                 val document = psiFile.viewProvider.document ?: continue
                 analyze(psiFile) {
-                    psiFile.collectDiagnostics(KaDiagnosticCheckerFilter.EXTENDED_AND_COMMON_CHECKERS)
+                    val checkerFilter = if (commonChecksOnly)
+                        KaDiagnosticCheckerFilter.ONLY_COMMON_CHECKERS
+                    else
+                        KaDiagnosticCheckerFilter.EXTENDED_AND_COMMON_CHECKERS
+                    psiFile.collectDiagnostics(checkerFilter)
                         .forEach { diag ->
                             val range = diag.textRanges.firstOrNull() ?: return@forEach
                             val offset = range.startOffset
@@ -246,16 +253,21 @@ class PsiEngine(private val extraClasspath: List<File> = emptyList()) : AutoClos
                 }
             }
 
-            val unsafeField = sun.misc.Unsafe::class.java.getDeclaredField("theUnsafe")
-            unsafeField.isAccessible = true
-            val unsafe = unsafeField.get(null) as sun.misc.Unsafe
             val field = PluginXmlPathResolver::class.java.getDeclaredField("DEFAULT_PATH_RESOLVER")
-            // field.get(null) triggers PluginXmlPathResolver class initialization so the static
-            // initializer runs before our Unsafe write; without this, the static initializer fires
-            // later (on first getstatic) and overwrites what we wrote.
             field.isAccessible = true
+            // Trigger class initialization so the static initializer runs before our write;
+            // without this, a later getstatic would overwrite what we wrote.
             field.get(null)
-            unsafe.putObject(unsafe.staticFieldBase(field), unsafe.staticFieldOffset(field), patchedResolver)
+            // sun.misc.Unsafe.staticFieldBase is terminally deprecated in Java 23+.
+            // Use jdk.internal.misc.Unsafe instead (requires --add-opens java.base/jdk.internal.misc=ALL-UNNAMED).
+            val internalUnsafeClass = Class.forName("jdk.internal.misc.Unsafe")
+            val getUnsafe = internalUnsafeClass.getDeclaredMethod("getUnsafe")
+            getUnsafe.isAccessible = true
+            val unsafe = getUnsafe.invoke(null)
+            val base = internalUnsafeClass.getMethod("staticFieldBase", java.lang.reflect.Field::class.java).invoke(unsafe, field)
+            val offset = internalUnsafeClass.getMethod("staticFieldOffset", java.lang.reflect.Field::class.java).invoke(unsafe, field) as Long
+            internalUnsafeClass.getMethod("putReference", Any::class.java, Long::class.javaPrimitiveType, Any::class.java)
+                .invoke(unsafe, base, offset, patchedResolver)
         }
 
         /** Extracts kotlin-stdlib classes from the running fat JAR into a temp JAR so the
@@ -265,7 +277,7 @@ class PsiEngine(private val extraClasspath: List<File> = emptyList()) : AutoClos
             val selfJar = PsiEngine::class.java.protectionDomain?.codeSource?.location?.toURI()
                 ?.let { File(it) }?.takeIf { it.isFile && it.extension == "jar" }
                 ?: return null
-            val tmpJar = File.createTempFile("kt-analyzer-stdlib-", ".jar")
+            val tmpJar = File.createTempFile("krit-stdlib-", ".jar")
             tmpJar.deleteOnExit()
             java.util.jar.JarOutputStream(tmpJar.outputStream()).use { out ->
                 java.util.jar.JarInputStream(selfJar.inputStream()).use { jarIn ->
