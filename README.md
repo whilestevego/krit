@@ -5,15 +5,14 @@ A Kotlin source code analyzer that uses the Kotlin compiler's native diagnostics
 ## Features
 
 - Runs Kotlin K2 compiler diagnostics with full type resolution
-- Runs IDE inspections from the Kotlin Language Server (bundled with [Zed](https://zed.dev))
-- Outputs human-readable text or [SARIF](https://sarifweb.azurewebsites.net/) (for CI/CD integration)
+- Runs IDE-level inspections alongside compiler diagnostics
+- Outputs human-readable text or SARIF (for CI/CD integration)
 - Configurable suppression and severity overrides via YAML
 - Exit code based on finding severity — suitable for use in pre-commit hooks or CI pipelines
 
 ## Requirements
 
 - Java 21+
-- [Zed](https://zed.dev) with the Kotlin extension installed (required for IDE inspections)
 
 ## Build
 
@@ -99,4 +98,4 @@ Found 2 finding(s): 1 error(s), 1 warning(s)
 
 ### SARIF
 
-SARIF 2.1.0 JSON, compatible with GitHub Code Scanning, Azure DevOps, and other SARIF consumers.
+SARIF JSON, compatible with GitHub Code Scanning, Azure DevOps, and other SARIF consumers.
