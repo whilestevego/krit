@@ -35,6 +35,7 @@ class PsiEngine(
     val messages: List<DiagnosticMessage> get() = _messages
     private val _inspectionFindings = mutableListOf<InspectionFinding>()
     val inspectionFindings: List<InspectionFinding> get() = _inspectionFindings
+    val inspectionErrors: List<InspectionError> get() = inspectionRunner.errors
     private val inspectionRunner = InspectionRunner(commonChecksOnly)
 
     /**
@@ -89,6 +90,7 @@ class PsiEngine(
             }
         }
 
+        val ktFiles = mutableListOf<Pair<KtFile, com.intellij.openapi.editor.Document>>()
         for ((_, psiFiles) in session.modulesWithFiles) {
             for (psiFile in psiFiles) {
                 if (psiFile !is KtFile) continue
@@ -117,8 +119,13 @@ class PsiEngine(
                             )
                         }
                 }
-                _inspectionFindings += inspectionRunner.runInspections(psiFile, document)
+                ktFiles += psiFile to document
             }
+        }
+        // Run IDE inspections outside of analyze{} — KotlinApplicableInspectionBase creates its
+        // own analysis session per element; nesting inside an outer analyze{} blocks it.
+        for ((psiFile, document) in ktFiles) {
+            _inspectionFindings += inspectionRunner.runInspections(psiFile, document)
         }
     }
 

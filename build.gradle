@@ -10,24 +10,58 @@ def kotlinLspVersion = project.property('kotlinLspVersion')
 def pluginsJarDir = layout.buildDirectory.dir("kotlin-plugins")
 def pluginsJar = pluginsJarDir.map { it.file("language-server-plugins-kotlin.jar") }
 
+// Companion JARs from plugins/kotlin/lib/ that inspection classes depend on.
+def inspectionCompanionJarNames = [
+  'intellij.kotlin.codeInsight.api.jar',       // AbstractKotlinInspection, KotlinApplicableInspectionBase
+  'intellij.kotlin.codeInsight.shared.jar',    // MayBeConstantInspectionBase, EnumValuesSoftDeprecateInspectionBase
+  'intellij.kotlin.base.codeInsight.jar',      // PsiOnlyKotlinMainFunctionDetector
+  'intellij.kotlin.codeInsight.utils.jar',     // PropertyModifierUtilsKt
+  'intellij.kotlin.base.psi.jar',              // TextRangeUtilsKt
+  'intellij.kotlin.base.projectStructure.jar', // LanguageVersionSettingsProviderUtils
+  'intellij.kotlin.base.util.jar',             // CollectionUtilsKt
+  'intellij.kotlin.base.analysis.utils.jar',   // SymbolUtilsKt
+  'kotlin.fir.frontend-independent.jar',       // RenameIdentifierFix, AddConstModifierFix
+]
+
+// IntelliJ Platform JARs from lib/ (build 262) that provide APIs not present in kotlin-compiler's
+// bundled platform version.  Loaded with child-first delegation so they override the older bundled
+// version; only ActionsKt (listed in InspectionRunner.InspectionClassLoader) is affected.
+def inspectionPlatformJarNames = [
+  'intellij.platform.core.jar',  // ActionsKt.runReadAction
+]
+
 tasks.register('downloadKotlinPluginsJar') {
   outputs.file(pluginsJar)
+  (inspectionCompanionJarNames + inspectionPlatformJarNames).each { name ->
+    outputs.file(pluginsJarDir.map { it.file(name) })
+  }
   doLast {
     def dir = pluginsJarDir.get().asFile
     dir.mkdirs()
-    def out = pluginsJar.get().asFile
-    if (!out.exists()) {
-      def url = "https://download-cdn.jetbrains.com/kotlin-lsp/${kotlinLspVersion}/kotlin-server-${kotlinLspVersion}.tar.gz"
-      def tmp = File.createTempFile("kotlin-server", ".tar.gz")
+    def allPluginJarNames = ['language-server-plugins-kotlin.jar'] + inspectionCompanionJarNames
+    def allJarNames = allPluginJarNames + inspectionPlatformJarNames
+    def allExist = allJarNames.every { new File(dir, it).exists() }
+    if (allExist) return
+
+    def url = "https://download-cdn.jetbrains.com/kotlin-lsp/${kotlinLspVersion}/kotlin-server-${kotlinLspVersion}.tar.gz"
+    def tmp = File.createTempFile("kotlin-server", ".tar.gz")
+    try {
+      new URL(url).withInputStream { input -> tmp << input }
+      def tmpDir = java.nio.file.Files.createTempDirectory("kotlin-server").toFile()
       try {
-        new URL(url).withInputStream { input -> tmp << input }
-        def proc = ["tar", "-xzOf", tmp.absolutePath,
-                    "kotlin-server-${kotlinLspVersion}/plugins/kotlin/lib/language-server-plugins-kotlin.jar"]
-                    .execute()
-        out.bytes = proc.inputStream.bytes
-        proc.waitFor()
-      } finally { tmp.delete() }
-    }
+        def pluginPaths = allPluginJarNames.collect { "kotlin-server-${kotlinLspVersion}/plugins/kotlin/lib/${it}" }
+        def platformPaths = inspectionPlatformJarNames.collect { "kotlin-server-${kotlinLspVersion}/lib/${it}" }
+        (["tar", "-xzf", tmp.absolutePath, "-C", tmpDir.absolutePath] + pluginPaths + platformPaths).execute().waitFor()
+        allPluginJarNames.each { name ->
+          def src = new File(tmpDir, "kotlin-server-${kotlinLspVersion}/plugins/kotlin/lib/${name}")
+          new File(dir, name).bytes = src.bytes
+        }
+        inspectionPlatformJarNames.each { name ->
+          def src = new File(tmpDir, "kotlin-server-${kotlinLspVersion}/lib/${name}")
+          new File(dir, name).bytes = src.bytes
+        }
+      } finally { tmpDir.deleteDir() }
+    } finally { tmp.delete() }
   }
 }
 
@@ -35,7 +69,10 @@ def pluginsJarResourceDir = layout.buildDirectory.dir("generated-resources")
 
 tasks.register('copyKotlinPluginsJarToResources', Copy) {
   dependsOn downloadKotlinPluginsJar
-  from pluginsJar
+  from pluginsJarDir
+  include 'language-server-plugins-kotlin.jar'
+  inspectionCompanionJarNames.each { include it }
+  inspectionPlatformJarNames.each { include it }
   into pluginsJarResourceDir.map { it.dir("whilestevego/krit/engine") }
 }
 
@@ -46,6 +83,9 @@ sourceSets {
     resources {
       srcDir pluginsJarResourceDir
     }
+  }
+  test {
+    kotlin.srcDir 'src/integrationTest/kotlin'
   }
 }
 
@@ -101,6 +141,11 @@ dependencies {
   implementation 'com.github.ajalt.clikt:clikt:4.4.0'
   implementation 'org.yaml:snakeyaml:2.2'
 
+  testImplementation 'io.kotest:kotest-runner-junit5:5.9.1'
+  testImplementation 'io.kotest:kotest-assertions-core:5.9.1'
+  testImplementation 'io.mockk:mockk:1.13.12'
+  testImplementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0'
+
 }
 
 java {
@@ -139,6 +184,18 @@ shadowJar {
 }
 
 assemble.dependsOn shadowJar
+
+test {
+  useJUnitPlatform()
+  // PsiEngine requires access to jdk.internal.misc.Unsafe (same flags as bin/krit)
+  jvmArgs(
+    '--enable-native-access=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+  )
+  testLogging {
+    showStandardStreams = true
+  }
+}
 
 tasks.register('writeCompileClasspath') {
   dependsOn configurations.runtimeClasspath

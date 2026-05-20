@@ -11,11 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Run krit against itself
 bin/krit --input src/main/kotlin --common-checks --fail-on-severity ERROR
 
-# Run unit tests (fast, no K2 init)
-./gradlew test
-
-# Run integration tests (slow, ~15–60s — initializes the K2 analysis session)
-./gradlew integrationTest
+# Run all tests (unit + integration; integration tests initialize the K2 session, ~15–60s)
+# NOTE: Gradle caches test results. Use cleanTest to force a fresh run when nothing has changed.
+./gradlew cleanTest test
 ```
 
 `bin/krit` is required to run the tool — it applies the necessary JVM flags (`--enable-native-access=ALL-UNNAMED`, `--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED`) that the fat JAR needs. Invoking the JAR directly without these flags will crash.

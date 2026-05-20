@@ -19,6 +19,7 @@ import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
+import java.net.URL
 import java.net.URLClassLoader
 import java.util.jar.JarInputStream
 
@@ -31,15 +32,32 @@ data class InspectionFinding(
     val column: Int,
 )
 
+data class InspectionError(
+    val inspectionId: String,
+    val filePath: String,
+    val context: String,
+    val throwable: Throwable,
+)
+
 class InspectionRunner(private val commonChecksOnly: Boolean = false) {
+    private val _errors = mutableListOf<InspectionError>()
+    val errors: List<InspectionError> get() = _errors
+
+    // Deduplicates per-element errors globally by (inspectionId, exceptionClass) so a single
+    // broken inspection doesn't flood the log with one entry per element per file.
+    private val seenElementErrors = mutableSetOf<Pair<String, String>>()
+
     fun runInspections(psiFile: KtFile, document: Document): List<InspectionFinding> {
         val inspections = Loader.getInspections(commonChecksOnly)
         if (inspections.isEmpty()) return emptyList()
+
+        registerFallbackServices(psiFile.project)
 
         val manager = MinimalInspectionManager(psiFile.project)
         val fileRange = psiFile.textRange
         // LocalInspectionToolSession's constructor is package-private; use reflection.
         val session = SESSION_CTOR.newInstance(psiFile, fileRange, fileRange, null) as LocalInspectionToolSession
+        val filePath = psiFile.virtualFile?.path ?: psiFile.name
 
         val findings = mutableListOf<InspectionFinding>()
 
@@ -49,15 +67,30 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
                 val visitor = inspection.buildVisitor(holder, false, session)
                 psiFile.accept(object : PsiElementVisitor() {
                     override fun visitElement(element: PsiElement) {
-                        runCatching { element.accept(visitor) }
+                        runCatching { element.accept(visitor) }.exceptionOrNull()?.let { ex ->
+                            val key = inspection.id to ex.javaClass.name
+                            if (seenElementErrors.add(key)) {
+                                _errors += InspectionError(
+                                    inspectionId = inspection.id,
+                                    filePath = filePath,
+                                    context = "${element.javaClass.simpleName}: ${element.text.take(60)}",
+                                    throwable = ex,
+                                )
+                            }
+                        }
                         element.acceptChildren(this)
                     }
                 })
                 for (problem in holder.results) {
                     findings += problem.toFinding(inspection.id, document)
                 }
-            } catch (_: Throwable) {
-                // Inspection not compatible with standalone session — skip silently.
+            } catch (e: Throwable) {
+                _errors += InspectionError(
+                    inspectionId = inspection.id,
+                    filePath = filePath,
+                    context = "setup/buildVisitor",
+                    throwable = e,
+                )
             }
         }
         return findings
@@ -140,12 +173,35 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
         private data class InspectionMeta(val enabledByDefault: Boolean, val level: String)
 
         private val pluginsJar: File? by lazy {
-            val stream = InspectionRunner::class.java
-                .getResourceAsStream("language-server-plugins-kotlin.jar") ?: return@lazy null
-            val tmp = File.createTempFile("krit-plugins-", ".jar")
+            extractResourceJar("language-server-plugins-kotlin.jar", "krit-plugins-")
+        }
+
+        // Companion JARs that provide base classes that language-server-plugins-kotlin.jar depends on
+        // but does not bundle.
+        private val companionJars: List<File> by lazy {
+            listOf(
+                "intellij.kotlin.codeInsight.api.jar",       // AbstractKotlinInspection, KotlinApplicableInspectionBase
+                "intellij.kotlin.codeInsight.shared.jar",    // MayBeConstantInspectionBase, EnumValuesSoftDeprecateInspectionBase
+                "intellij.kotlin.base.codeInsight.jar",      // PsiOnlyKotlinMainFunctionDetector
+                "intellij.kotlin.codeInsight.utils.jar",     // PropertyModifierUtilsKt
+                "intellij.kotlin.base.psi.jar",              // TextRangeUtilsKt
+                "intellij.kotlin.base.projectStructure.jar", // LanguageVersionSettingsProviderUtils
+                "intellij.kotlin.base.util.jar",             // CollectionUtilsKt
+                "intellij.kotlin.base.analysis.utils.jar",   // SymbolUtilsKt
+                "kotlin.fir.frontend-independent.jar",       // RenameIdentifierFix, AddConstModifierFix
+                // IntelliJ Platform build 262: kotlin-compiler bundles an older platform version that
+                // lacks ActionsKt.runReadAction. InspectionClassLoader uses child-first delegation for
+                // ActionsKt so the build-262 implementation takes precedence.
+                "intellij.platform.core.jar",                // ActionsKt.runReadAction
+            ).mapNotNull { extractResourceJar(it, "krit-companion-") }
+        }
+
+        private fun extractResourceJar(resourceName: String, prefix: String): File? {
+            val stream = InspectionRunner::class.java.getResourceAsStream(resourceName) ?: return null
+            val tmp = File.createTempFile(prefix, ".jar")
             tmp.deleteOnExit()
             stream.use { it.copyTo(tmp.outputStream()) }
-            tmp
+            return tmp
         }
 
         private val xmlMeta: Map<String, InspectionMeta> by lazy {
@@ -189,14 +245,37 @@ class InspectionRunner(private val commonChecksOnly: Boolean = false) {
                 System.err.println("krit: language-server-plugins-kotlin.jar not bundled — IDE inspections skipped")
                 return emptyList()
             }
-            val loader = URLClassLoader(
-                arrayOf(jar.toURI().toURL()),
-                InspectionRunner::class.java.classLoader,
-            )
+            val urls = (listOf(jar) + companionJars).map { it.toURI().toURL() }.toTypedArray()
+            val loader = InspectionClassLoader(urls, InspectionRunner::class.java.classLoader)
             return scanJarForInspectionClasses(jar)
                 .filter { it !in BLACKLISTED_FQNS }
                 .mapNotNull { fqn -> instantiate(fqn, loader) }
                 .also { System.err.println("krit: Loaded ${it.size} IDE inspections") }
+        }
+
+        // Child-first classloader for ActionsKt: kotlin-compiler bundles an older platform version
+        // that lacks ActionsKt.runReadAction; intellij.platform.core.jar (build 262) provides it.
+        // All other classes use standard parent-first delegation so PSI/inspection API types remain
+        // consistent between the main classpath and the inspection plugins.
+        private class InspectionClassLoader(urls: Array<URL>, parent: ClassLoader) : URLClassLoader(urls, parent) {
+            override fun loadClass(name: String, resolve: Boolean): Class<*> {
+                if (name == "com.intellij.openapi.application.ActionsKt") {
+                    synchronized(getClassLoadingLock(name)) {
+                        findLoadedClass(name)?.let { c ->
+                            if (resolve) resolveClass(c)
+                            return c
+                        }
+                        return try {
+                            val c = findClass(name)
+                            if (resolve) resolveClass(c)
+                            c
+                        } catch (_: ClassNotFoundException) {
+                            super.loadClass(name, resolve)
+                        }
+                    }
+                }
+                return super.loadClass(name, resolve)
+            }
         }
 
         private val INSPECTION_ELEMENT_RE = Regex("""<localInspection\b([^>]*)>""")
