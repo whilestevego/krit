@@ -19,7 +19,7 @@ class KritIntegrationTest : FunSpec({
         System.getProperty("java.class.path")
             .split(File.pathSeparatorChar)
             .map(::File)
-            .find { it.name.startsWith("kotlin-stdlib") && it.extension == "jar" }
+            .find { it.name.matches(Regex("kotlin-stdlib-[0-9].*\\.jar")) }
 
     fun withAnalysis(
         files: List<File>,

@@ -31,7 +31,7 @@ class CommonChecksTest : FunSpec({
         System.getProperty("java.class.path")
             .split(File.pathSeparatorChar)
             .map(::File)
-            .find { it.name.startsWith("kotlin-stdlib") && it.extension == "jar" }
+            .find { it.name.matches(Regex("kotlin-stdlib-[0-9].*\\.jar")) }
 
     fun compileJavaToJar(javaFile: File): File? {
         val compiler = javax.tools.ToolProvider.getSystemJavaCompiler() ?: return null

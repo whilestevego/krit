@@ -205,7 +205,9 @@ test {
 
 tasks.register('integrationTest', Test) {
   testClassesDirs = sourceSets.integrationTest.output.classesDirs
-  classpath = sourceSets.integrationTest.runtimeClasspath
+  // main.output must precede kotlin-compiler.jar (which arrives early via mockk's transitive deps)
+  // so the project's com.intellij.util.containers.UtilKt shadow wins over the bundled platform version.
+  classpath = files(sourceSets.main.output) + sourceSets.integrationTest.runtimeClasspath
   useJUnitPlatform()
   jvmArgs(
     '--enable-native-access=ALL-UNNAMED',
