@@ -1,3 +1,5 @@
 .gradle/
 build/
 *.class
+.claude/plans/
+krit-errors.log
