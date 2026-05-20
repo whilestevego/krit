@@ -84,9 +84,15 @@ sourceSets {
       srcDir pluginsJarResourceDir
     }
   }
-  test {
+  integrationTest {
     kotlin.srcDir 'src/integrationTest/kotlin'
+    compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+    runtimeClasspath += output + compileClasspath
   }
+}
+
+configurations {
+  integrationTestImplementation.extendsFrom testImplementation
 }
 
 repositories {
@@ -188,6 +194,21 @@ assemble.dependsOn shadowJar
 test {
   useJUnitPlatform()
   // PsiEngine requires access to jdk.internal.misc.Unsafe (same flags as bin/krit)
+  jvmArgs(
+    '--enable-native-access=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+  )
+  testLogging {
+    showStandardStreams = true
+  }
+}
+
+tasks.register('integrationTest', Test) {
+  testClassesDirs = sourceSets.integrationTest.output.classesDirs
+  // main.output must precede kotlin-compiler.jar (which arrives early via mockk's transitive deps)
+  // so the project's com.intellij.util.containers.UtilKt shadow wins over the bundled platform version.
+  classpath = files(sourceSets.main.output) + sourceSets.integrationTest.runtimeClasspath
+  useJUnitPlatform()
   jvmArgs(
     '--enable-native-access=ALL-UNNAMED',
     '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',

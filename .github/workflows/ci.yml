@@ -26,5 +26,8 @@ jobs:
       - name: Test
         run: ./gradlew test
 
+      - name: Integration Test
+        run: ./gradlew integrationTest
+
       - name: Analyze with krit
         run: bin/krit --input src/main/kotlin --common-checks --fail-on-severity ERROR
