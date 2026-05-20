@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.optionalValue
 import com.github.ajalt.clikt.parameters.types.file
 import whilestevego.krit.api.Severity
 import whilestevego.krit.config.ConfigLoader
@@ -115,6 +116,15 @@ class KritCommand :
             )
             .default("ERROR")
 
+    private val errorLog by
+        option(
+                "--error-log",
+                metavar = "FILE",
+                help = "Write inspection errors to FILE (omit FILE to use krit-errors.log)",
+            )
+            .file()
+            .optionalValue(File("krit-errors.log"))
+
     override fun run() {
         val config = ConfigLoader.load(configFile)
         val classpathFiles = buildList {
@@ -137,6 +147,24 @@ class KritCommand :
                 rawFindings.map { f ->
                     val rel = File(f.filePath).relativeToOrNull(cwd)
                     f.copy(filePath = if (rel != null) "./${rel.path}" else f.filePath)
+                }
+            }
+
+            val logFile = errorLog
+            if (logFile != null) {
+                val inspectionErrors = engine.inspectionErrors
+                if (inspectionErrors.isNotEmpty()) {
+                    logFile.printWriter(Charsets.UTF_8).use { log ->
+                        log.println("krit inspection error log — ${java.time.Instant.now()}")
+                        log.println("${inspectionErrors.size} error(s)\n")
+                        inspectionErrors.forEach { err ->
+                            log.println("[${err.inspectionId}] ${err.filePath} @ ${err.context}")
+                            log.println(err.throwable.toString())
+                            err.throwable.stackTrace.take(8).forEach { log.println("    at $it") }
+                            log.println()
+                        }
+                    }
+                    echo("krit: ${inspectionErrors.size} inspection error(s) written to ${logFile.path}", err = true)
                 }
             }
 
