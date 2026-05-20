@@ -24,7 +24,7 @@ jobs:
         run: ./gradlew shadowJar
 
       - name: Test
-        run: ./gradlew cleanTest test
+        run: ./gradlew test
 
       - name: Analyze with krit
         run: bin/krit --input src/main/kotlin --common-checks --fail-on-severity ERROR
