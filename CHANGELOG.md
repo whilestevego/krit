@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.3.0 — 2026-05-20
+
+### Added
+
+- **`--error-log [FILE]`** — collect structured inspection errors instead of silently swallowing them. Omit the flag for no log; use `--error-log` alone to write `krit-errors.log`; supply a path to write elsewhere. Errors are deduplicated by `(inspectionId, exceptionClass)` so a single broken inspection doesn't flood the log.
+- **Companion JARs** — 10 companion JARs from the Kotlin language-server tarball are now downloaded at build time and bundled alongside `language-server-plugins-kotlin.jar`. This lets IDE inspection classes resolve their base types at load time, fixing inspections that previously failed silently due to `ClassNotFoundException`.
+- **`ServiceShims`** — no-op implementations of `ModCommandService`, `CodeStyleManager`, `PomModel`, and `IndentHelper` so inspections that call these services don't crash on startup.
+- **Unit test suite** — 61 unit tests covering `Severity`, `ConfigLoader`, `TextReporter`, `SarifReporter`, `AnalysisRunner`, and `LineFilterStream`. Run with `./gradlew test` (fast, under 5 seconds, no K2 session).
+- **Integration test suite** — `KritIntegrationTest` with 9 end-to-end tests covering type errors, suppression, severity overrides, and multi-file analysis. Run with `./gradlew integrationTest`.
+
+### Fixed
+
+- **Inspection execution order** — IDE inspections are now collected and run after the `analyze {}` block closes. Previously they were nested inside an outer K2 analysis session, which blocked `KotlinApplicableInspectionBase` from opening its own session and caused it to silently produce no findings.
+- **Classloader conflicts** — source stubs for `ReferencesSearch` and IntelliJ container utilities resolve symbol conflicts between the bundled platform JARs and the companion JARs loaded by `InspectionRunner`.
+
 ## v0.2.0 — 2026-05-20
 
 ### Added
