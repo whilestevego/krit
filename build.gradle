@@ -84,9 +84,15 @@ sourceSets {
       srcDir pluginsJarResourceDir
     }
   }
-  test {
+  integrationTest {
     kotlin.srcDir 'src/integrationTest/kotlin'
+    compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+    runtimeClasspath += output + compileClasspath
   }
+}
+
+configurations {
+  integrationTestImplementation.extendsFrom testImplementation
 }
 
 repositories {
@@ -188,6 +194,19 @@ assemble.dependsOn shadowJar
 test {
   useJUnitPlatform()
   // PsiEngine requires access to jdk.internal.misc.Unsafe (same flags as bin/krit)
+  jvmArgs(
+    '--enable-native-access=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+  )
+  testLogging {
+    showStandardStreams = true
+  }
+}
+
+tasks.register('integrationTest', Test) {
+  testClassesDirs = sourceSets.integrationTest.output.classesDirs
+  classpath = sourceSets.integrationTest.runtimeClasspath
+  useJUnitPlatform()
   jvmArgs(
     '--enable-native-access=ALL-UNNAMED',
     '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',

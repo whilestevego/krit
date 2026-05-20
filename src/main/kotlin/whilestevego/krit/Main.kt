@@ -206,7 +206,7 @@ private fun suppressStderrPrefixes(vararg prefixes: String) {
     System.setErr(PrintStream(LineFilterStream(System.err, prefixes.toList()), true, Charsets.UTF_8))
 }
 
-private class LineFilterStream(
+internal class LineFilterStream(
     private val delegate: OutputStream,
     private val suppressPrefixes: List<String>,
 ) : OutputStream() {

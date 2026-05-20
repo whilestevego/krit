@@ -26,7 +26,7 @@ data class DiagnosticMessage(
     val column: Int,
 )
 
-class PsiEngine(
+open class PsiEngine(
     private val extraClasspath: List<File> = emptyList(),
     private val commonChecksOnly: Boolean = false,
 ) : AutoCloseable {
