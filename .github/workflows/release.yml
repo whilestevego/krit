@@ -23,15 +23,9 @@ jobs:
         run: ./gradlew shadowJar
 
       - name: Extract changelog
-        id: changelog
         run: |
           TAG=${GITHUB_REF_NAME}
-          NOTES=$(awk "/^## ${TAG}/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
-          {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+          awk "/^## ${TAG}/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md > notes.md
 
       - name: Create release
         env:
@@ -39,5 +33,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "krit $GITHUB_REF_NAME" \
-            --notes "${{ steps.changelog.outputs.notes }}" \
+            --notes-file notes.md \
             build/libs/krit.jar
